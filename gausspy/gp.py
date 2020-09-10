@@ -13,6 +13,7 @@ class GaussianDecomposer(object):
     def __init__(self, filename=None, phase="one"):
         if filename:
             temp = pickle.load(open(filename, "rb"))
+            print(temp.p["alpha1"])
             self.p = temp.p
         else:
             self.p = {
@@ -96,8 +97,10 @@ class GaussianDecomposer(object):
             return
 
         if self.p["mode"] != "conv":
-            a1 = 10 ** self.p["alpha1"]
-            a2 = 10 ** self.p["alpha2"] if self.p["phase"] == "two" else None
+            a1 = self.p["alpha1"]
+            a2 = self.p["alpha2"] if self.p["phase"] == "two" else None
+            # a1 = 10 ** self.p["alpha1"]
+            # a2 = 10 ** self.p["alpha2"] if self.p["phase"] == "two" else None
         else:
             a1 = self.p["alpha1"]
             a2 = self.p["alpha2"] if self.p["phase"] == "two" else None
@@ -170,6 +173,7 @@ class GaussianDecomposer(object):
 
         batch_decomposition.init()
         result_list = batch_decomposition.func()
+        #print(result_list)
         print("SUCCESS")
 
         new_keys = [
@@ -188,9 +192,7 @@ class GaussianDecomposer(object):
         ]
 
         output_data = dict((key, []) for key in new_keys)
-
         for i, result in enumerate(result_list):
-
             # Save best-fit parameters
             ncomps = result["N_components"]
             amps = result["best_fit_parameters"][0:ncomps] if ncomps > 0 else []

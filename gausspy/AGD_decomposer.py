@@ -7,8 +7,9 @@ import time
 
 # Standard Third Party
 import numpy as np
+import math
 from scipy.interpolate import interp1d
-
+from scipy.special import factorial
 # from scipy.optimize import leastsq, minimize
 from lmfit import minimize as lmfit_minimize
 from lmfit import Parameters
@@ -34,14 +35,23 @@ def errs_vec_from_lmfit(lmfit_params):
 
 
 def paramvec_to_lmfit(paramvec):
-    """ Transform a Python iterable of parameters into a LMFIT Parameters object"""
     ncomps = len(paramvec) // 3
     params = Parameters()
     for i in range(len(paramvec)):
+        # print(paramvec)
+        # print(paramvec[i])
+        # print(i)
         if i < ncomps:
-            params.add("p" + str(i + 1), value=paramvec[i], min=0.0)
+            # params.add("p" + str(i + 1), value=paramvec[i], min=0., max=5, brute_step=1)
+            params.add("p" + str(i + 1), value=paramvec[i],min=0,max=paramvec[i])
+        elif i < 2*ncomps-1:
+            params.add("p" + str(i + 1), value=paramvec[i],min=-10,max=10.)
+        elif i == 2*ncomps-1:
+            # print(i+ncomps-1)
+            params.add("p" + str(i + 1), value=paramvec[i],min=-10,max=10)
         else:
-            params.add("p" + str(i + 1), value=paramvec[i])
+            # print(paramvec[i])
+            params.add("p" + str(i + 1), value=paramvec[i],min=paramvec[i]-0.1,max=paramvec[i])
 
     return params
 
@@ -69,8 +79,36 @@ def say(message, verbose=False):
 def gaussian(peak, FWHM, mean):
     """Return a Gaussian function
     """
-    sigma = FWHM / 2.354820045  # (2 * sqrt( 2 * ln(2)))
-    return lambda x: peak * np.exp(-(x - mean) ** 2 / 2.0 / sigma ** 2)
+    # Peak = Amplitude -> A_0
+    # FWHM = Width -> k
+    # mean = centre -> heavyside
+    #sigma = FWHM / 2.354820045  # (2 * sqrt( 2 * ln(2)))
+    # return lambda x: np.where((x) < (mean),0,peak * 1/((x-mean) ** (1/FWHM)))  
+
+    #return lambda x: np.where((x) > (mean+FWHM*math.pi/(2)),0,np.where((x) < (mean),0,-peak * np.tan((x/FWHM + math.pi/2 - mean))))
+    return lambda x: np.where((x) < (mean),0,peak * np.exp(- (x-mean) / np.exp(FWHM)))
+    # return lambda x: np.where((x) < (mean),1e-5,peak*np.exp(-((x-mean)*np.exp((x-mean)))**(1/FWHM)))
+
+    #return lambda x: np.where((x) < (mean),1e-5,FWHM*  (x-mean) ** (-1/peak))
+    # return lambda x: np.where((-(x/FWHM-mean-1)**5 * (peak))<=0,0,np.where(((x) <= (mean)),0,-(x/FWHM-mean-1)**5 * (peak))) 
+    # return lambda x: np.where((-peak* (x-mean-1)**21)<=0,0,np.where(((x) < (mean)),0,-peak* (x-mean-1)**21))
+    #return lambda x: np.where((x)<mean, 0,np.where(FWHM ==0,0,peak / factorial((x-mean) / FWHM)))
+def gaussian2(peak, FWHM, mean):
+    """Return a Gaussian function
+    """
+    # Peak = Amplitude -> A_0
+    # FWHM = Width -> k
+    # mean = centre -> heavyside
+    #sigma = FWHM / 2.354820045  # (2 * sqrt( 2 * ln(2)))
+    # return lambda x: np.where((x) < (mean),0,peak * 1/((x-mean) ** 1/(FWHM)))  
+
+    #return lambda x: np.where((x) > (mean+FWHM*math.pi/(2)),0,np.where((x) < (mean),0,-peak * np.tan((x/FWHM + math.pi/2 - mean))))
+    # return lambda x: np.where((x) < (mean),1e-5,peak * np.exp(- (x-mean) / (FWHM)))
+    #return lambda x: np.where((x) < (mean),1e-5,peak*np.exp(-((x-mean)*np.exp((x-mean)))**(1/FWHM)))
+
+    #return lambda x: np.where((x) < (mean),1e-5,FWHM*  (x-mean) ** (-1/peak))
+    return lambda x: np.where((-(x-mean) / FWHM + (peak))<=0,0,np.where(((x) <= (mean)),0,-(x-mean) / FWHM + (peak))) 
+    #return lambda x: np.where((x)<mean, 0,np.where(FWHM ==0,0,peak / factorial((x-mean) / FWHM)))
 
 
 def func(x, *args):
@@ -83,8 +121,45 @@ def func(x, *args):
     yout = np.zeros(len(x))
     for i in range(ncomps):
         yout = yout + gaussian(args[i], args[i + ncomps], args[i + 2 * ncomps])(x)
+        #if i == 1:
+        #    print(max(args[1+2*ncomps:1+3*ncomps]))
+        #    yout = yout + gaussian2(args[i], args[i + ncomps], args[i + 2 * ncomps])(x)
+        #else:
+        #    yout = yout + gaussian(args[i], args[i + ncomps], args[i + 2 * ncomps])(x)
+
     return yout
 
+
+def fvel_init(
+        ind,
+        data,
+):
+    # This takes the index, finds the index of the maximum value surrounding that index and returns the assasiated x value
+    new_ind=np.array([],dtype="int")
+    for i in ind:
+        all_data = [data[i-3],data[i-2],data[i-1],data[i],data[i+1],data[i+2],data[i+3]]
+        # print(all_data)
+        # print(max(all_data))
+        if all_data[0] == max(all_data):
+            new_ind=np.append(new_ind,[i-3]) 
+        elif all_data[1] == max(all_data):
+            new_ind=np.append(new_ind,[i-2]) 
+        elif all_data[2] == max(all_data):
+            new_ind=np.append(new_ind,[i-1]) 
+        elif all_data[3] == max(all_data):
+            new_ind=np.append(new_ind,[i]) 
+        elif all_data[4] == max(all_data):
+            new_ind=np.append(new_ind,[i+1]) 
+        elif all_data[5] == max(all_data):
+            new_ind=np.append(new_ind,[i+2]) 
+        else:
+            new_ind=np.append(new_ind,[i+3]) 
+      # Converts from index -> x domain
+    # print(ind)
+    # print(data[ind])
+    # print(new_ind)
+    # print(data[new_ind])
+    return new_ind
 
 def initialGuess(
     vel,
@@ -114,6 +189,10 @@ def initialGuess(
 
     errors = None  # Until error
 
+    # print("data")
+    # print(data)
+    # print("vel")
+    # print(vel)
     say("\n\n  --> initialGuess() \n", verbose)
     say("Algorithm parameters: ", verbose)
     say("alpha = {0}".format(alpha), verbose)
@@ -131,6 +210,8 @@ def initialGuess(
 
     # Data inspection
     vel = np.array(vel)
+    # print("vel")
+    # print(vel)
     data = np.array(data)
     dv = np.abs(vel[1] - vel[0])
     fvel = interp1d(np.arange(len(vel)), vel)  # Converts from index -> x domain
@@ -141,15 +222,29 @@ def initialGuess(
     if mode == "python":
         say("Taking python derivatives...", verbose)
         u = tvdiff.TVdiff(data, dx=dv, alph=alpha)
+        #print(u)
         u2 = tvdiff.TVdiff(u, dx=dv, alph=alpha)
+        #print(u2)
         u3 = tvdiff.TVdiff(u2, dx=dv, alph=alpha)
+        #print(u3)
         u4 = tvdiff.TVdiff(u3, dx=dv, alph=alpha)
+        #print(u4)
+        # print("u----------------------------")
+        # print(u)
+        # print("u2----------------------------")
+        # print(u2)
+        # print("u3----------------------------")
+        # print(u3)
+        # print("u4----------------------------")
+        # print(u4)
+        # print("here1")
     elif mode == "conv":
         say("Convolution sigma [pixels]: {0}".format(alpha), verbose)
         gauss_sigma = alpha
         gauss_sigma_int = np.max([np.fix(gauss_sigma), 5])
         gauss_dn = gauss_sigma_int * 6
 
+        print("here")
         xx = np.arange(2 * gauss_dn + 2) - (gauss_dn) - 0.5
         gauss = np.exp(-xx ** 2 / 2.0 / gauss_sigma ** 2)
         gauss = gauss / np.sum(gauss)
@@ -160,7 +255,8 @@ def initialGuess(
         gauss2 = np.exp(-xx2 ** 2 / 2.0 / gauss_sigma ** 2)
         gauss2 = gauss2 / np.sum(gauss2)
         gauss2 = np.diff(gauss2) / dv
-        gauss2 = np.diff(gauss2) / dv
+
+        data,gauss2 = np.diff(gauss2) / dv
         gauss4 = np.diff(np.diff(gauss2)) / dv ** 2
 
         u = convolve(data, gauss1, mode="wrap")
@@ -191,14 +287,26 @@ def initialGuess(
         say("Second derivative threshold: {0}".format(thresh2), verbose)
     else:
         thresh2 = 0.0
-    mask4 = np.array(u2.copy()[1:] < thresh2, dtype="int")  # Negative second derivative
+
+    # print("Thresh")
+    print(-1/SNR_thresh)
+    mask4 = np.array(u2.copy()[1:] < -1/SNR_thresh, dtype="int")  # Negative second derivative
+    # mask4 = np.array(u2.copy()[1:] < -2.4, dtype="int")  # Negative second derivative
 
     # Find optima of second derivative
     # --------------------------------
-    zeros = np.abs(np.diff(np.sign(u3)))
-    zeros = zeros * mask1 * mask3 * mask4
+    # print(mask4)
+    # print(mask1)
+    # print(mask3)
+    # zeros = np.abs(np.diff(np.sign(u3)))
+    zeros = np.array(np.diff(np.sign(u3))>0,dtype="int")
+    # zeros = np.abs((np.diff(u2)))
+    # print(zeros)
+    # zeros = zeros * mask4 * mask1* mask3
+    zeros = zeros*mask4
     offsets_data_i = np.array(np.where(zeros)).ravel()  # Index offsets
-    offsets = fvel(offsets_data_i + 0.5)  # Velocity offsets (Added 0.5 July 23)
+
+    offsets = fvel(fvel_init(offsets_data_i,data))  # Velocity offsets (Added 0.5 July 23)
     N_components = len(offsets)
     say(
         "Components found for alpha={1}: {0}".format(N_components, alpha),
@@ -226,23 +334,31 @@ def initialGuess(
 
     # Find Relative widths, then measure
     # peak-to-inflection distance for sharpest peak
-    widths = np.sqrt(np.abs(data / u2)[offsets_data_i])
-    FWHMs = widths * 2.355
+    widths = np.sqrt(np.abs(data/u2)[offsets_data_i])
+    # widths = np.sqrt(np.abs(data / u2)[offsets_data_i])
+    FWHMs = widths *2.355
 
     # Attempt deblending.
     # If Deblending results in all non-negative answers, keep.
-    amps = np.array(data[offsets_data_i])
-    if deblend:
-        FF_matrix = np.zeros([len(amps), len(amps)])
-        for i in range(FF_matrix.shape[0]):
-            for j in range(FF_matrix.shape[1]):
-                FF_matrix[i, j] = np.exp(
-                    -(offsets[i] - offsets[j]) ** 2 / 2.0 / (FWHMs[j] / 2.355) ** 2
-                )
-        amps_new = lstsq(FF_matrix, amps, rcond=None)[0]
-        if np.all(amps_new > 0):
-            amps = amps_new
-
+    amps = np.array(data[fvel_init(offsets_data_i,data)])
+    print("here")
+    print(offsets)
+    # print(amps)
+    # if deblend:
+    #     FF_matrix = np.zeros([len(amps), len(amps)])
+    #     for i in range(FF_matrix.shape[0]):
+    #         for j in range(FF_matrix.shape[1]):
+    #             #FF_matrix[i, j] = np.where(offsets[i]<offsets[j],0,amps[j]*np.exp(-((offsets[i] - offsets[j])*np.exp(-(offsets[i] - offsets[j])))**(1/FWHMs[j])))
+    #             #FF_matrix[i, j] = np.where(offsets[i]<offsets[j],0,amps[j]*np.exp(-((offsets[i] - offsets[j])*np.exp(-(offsets[i] - offsets[j])))**(1/FWHMs[j])))
+    #             FF_matrix[i, j] = np.where(offsets[i]<offsets[j],0,np.exp(-(offsets[i] - offsets[j])/(FWHMs[j])))
+    #              # FF_matrix[i,j] = np.where((- (amps[j])* (offsets[i]-offsets[j]-1)**21)<=0,0,np.where(((offsets[i]) < (offsets[j])),0,- amps[j]* (offsets[i]-offsets[j]-1)**21)) 
+    #             # FF_matrix[i, j] = np.exp(
+    #             #     -(offsets[i] - offsets[j]) ** 2 / 2.0 / (FWHMs[j] / 2.355) ** 2
+    #             # )
+    #     amps_new = lstsq(FF_matrix, amps, rcond=None)[0]
+    #     if np.all(amps_new > 0):
+    #         amps = amps_new
+    # print(offsets)
     odict = {
         "means": offsets,
         "FWHMs": FWHMs,
@@ -287,6 +403,7 @@ def AGD(
         print("alpha2 value required")
         return
 
+    # print(vel)
     dv = np.abs(vel[1] - vel[0])
     v_to_i = interp1d(vel, np.arange(len(vel)))
 
@@ -350,14 +467,16 @@ def AGD(
                 model0 = func(vel, *params)
                 model2 = np.diff(np.diff(model0.ravel())) / dv / dv
                 resids1 = fitmask[1:-1] * (model2 - u2[1:-1]) / errors[1:-1]
-                resids2 = notfitmask * (model0 - data) / errors / 10.0
-                return np.append(resids1, resids2)
+                resids2 = notfitmask * (model0 - data) #/ errors / 10.0
+                return resids2
+                # return np.append(resids1, resids2)
 
             # Perform the intermediate fit using LMFIT
             t0 = time.time()
             say("Running LMFIT on initial narrow components...", verbose)
             lmfit_params = paramvec_to_lmfit(params_g1)
-            result = lmfit_minimize(objectiveD2_leastsq, lmfit_params, method="leastsq")
+            result = lmfit_minimize(objectiveD2_leastsq, lmfit_params, method="least_squares")
+            # result = lmfit_minimize(objectiveD2_leastsq, lmfit_params, method="leastsq")
             params_f1 = vals_vec_from_lmfit(result.params)
             ncomps_f1 = len(params_f1) // 3
 
@@ -434,6 +553,7 @@ def AGD(
         [amps_temp[w_sort_amp], widths_temp[w_sort_amp], offsets_temp[w_sort_amp]]
     )
 
+    # print(params_gf)
     if perform_final_fit:
         say("\n\n  --> Final Fitting... \n", verbose)
 
@@ -447,7 +567,8 @@ def AGD(
             # Final fit using unconstrained parameters
             t0 = time.time()
             lmfit_params = paramvec_to_lmfit(params_gf)
-            result2 = lmfit_minimize(objective_leastsq, lmfit_params, method="leastsq")
+            # result2 = lmfit_minimize(objective_leastsq, lmfit_params, method="differential_evolution")
+            result2 = lmfit_minimize(objective_leastsq, lmfit_params, method="least_squares")
             params_fit = vals_vec_from_lmfit(result2.params)
             params_errs = errs_vec_from_lmfit(result2.params)
             ncomps_fit = len(params_fit) // 3

@@ -1,0 +1,6 @@
+astropy
+numpy
+scipy
+lmfit
+matplotlib
+tqdm

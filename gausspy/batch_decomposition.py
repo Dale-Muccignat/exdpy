@@ -67,11 +67,14 @@ def parallel_process(array, function, n_jobs=16, use_kwargs=False, front_num=1):
             function(**a) if use_kwargs else function(a) for a in array[:front_num]
         ]
     # If we set n_jobs to 1, just run a list comprehension. This is useful for benchmarking and debugging.
+    print("N JOBSL")
+    print(n_jobs)
     if n_jobs == 1:
-        return front + [
+        front= front + [
             function(**a) if use_kwargs else function(a)
             for a in tqdm(array[front_num:])
         ]
+        return front
     # Assemble the workers
     with ProcessPoolExecutor(max_workers=n_jobs) as pool:
         # Pass the elements of array into function
